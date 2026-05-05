@@ -1,0 +1,139 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
+All colors MUST be HSL.
+*/
+
+@layer base {
+  :root {
+    /* Premium Light Mode - Crisp, clean, soft grays */
+    --background: 210 40% 98%; /* slate-50 */
+    --foreground: 222.2 84% 4.9%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+
+    --primary: 255 85% 60%; /* Vibrant SaaS Purple */
+    --primary-foreground: 210 40% 98%;
+
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+
+    --muted: 214 32% 91%; /* slate-100 */
+    --muted-foreground: 215.4 16.3% 46.9%;
+
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+
+    --success: 142 71% 45%;
+    --success-foreground: 210 40% 98%;
+
+    --danger: 348 83% 54%;
+    --danger-foreground: 210 40% 98%;
+
+    --destructive: 348 83% 54%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 255 85% 60%;
+
+    --radius: 1rem; /* rounded-2xl feel globally */
+
+    --gradient-primary: linear-gradient(135deg, hsl(255 85% 60%), hsl(220 90% 60%));
+    --gradient-success: linear-gradient(135deg, hsl(142 71% 45%), hsl(158 64% 52%));
+    --gradient-danger: linear-gradient(135deg, hsl(348 83% 54%), hsl(340 82% 52%));
+    
+    --glow-primary: 0 10px 40px -10px hsl(255 85% 60% / 0.4);
+    --glow-success: 0 10px 30px -10px hsl(142 71% 45% / 0.4);
+    --glow-danger: 0 10px 30px -10px hsl(348 83% 54% / 0.4);
+
+    --transition-smooth: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+  }
+
+  .dark {
+    /* Premium Dark Mode - Deep Navy / Slate 950 */
+    --background: 224 71% 4%; /* Deep Navy */
+    --foreground: 210 40% 98%;
+
+    --card: 222 47% 7%; /* Slightly lighter navy for cards */
+    --card-foreground: 210 40% 98%;
+
+    --popover: 222 47% 7%;
+    --popover-foreground: 210 40% 98%;
+
+    --primary: 255 85% 65%; /* Bright SaaS Purple */
+    --primary-foreground: 210 40% 98%;
+
+    --secondary: 217 33% 17%;
+    --secondary-foreground: 210 40% 98%;
+
+    --muted: 217 33% 17%;
+    --muted-foreground: 215 20% 65%;
+
+    --accent: 255 85% 65%;
+    --accent-foreground: 210 40% 98%;
+
+    --success: 142 71% 45%;
+    --success-foreground: 210 40% 98%;
+
+    --danger: 348 83% 60%;
+    --danger-foreground: 210 40% 98%;
+
+    --destructive: 348 83% 60%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 217 33% 17%;
+    --input: 217 33% 17%;
+    --ring: 255 85% 65%;
+
+    --gradient-primary: linear-gradient(135deg, hsl(255 85% 65%), hsl(220 90% 65%));
+    --gradient-success: linear-gradient(135deg, hsl(142 71% 45%), hsl(158 64% 52%));
+    --gradient-danger: linear-gradient(135deg, hsl(348 83% 60%), hsl(340 82% 52%));
+    
+    --glow-primary: 0 10px 40px -10px hsl(255 85% 65% / 0.5);
+    --glow-success: 0 10px 30px -10px hsl(142 71% 45% / 0.5);
+    --glow-danger: 0 10px 30px -10px hsl(348 83% 60% / 0.5);
+  }
+}
+
+@layer utilities {
+  .glass-card {
+    @apply bg-card/60 backdrop-blur-xl border border-border/50 shadow-xl shadow-black/5;
+  }
+  
+  .glass-panel {
+    @apply bg-background/80 backdrop-blur-md border border-border/40;
+  }
+  
+  .gradient-primary {
+    background: var(--gradient-primary);
+  }
+  
+  .glow-primary {
+    box-shadow: var(--glow-primary);
+  }
+  
+  .glow-hover {
+    @apply hover:shadow-[var(--glow-primary)] hover:-translate-y-1 transition-smooth;
+  }
+  
+  .transition-smooth {
+    transition: var(--transition-smooth);
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+  }
+}
