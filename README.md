@@ -1,59 +1,66 @@
 # Spark Crypto Hub
 
-> A lightweight, real-time crypto watcher that helps you track prices, charts, and market movements for your favorite cryptocurrencies.
+> A modern, real-time cryptocurrency dashboard that helps you track prices, charts, and market movements for your favorite cryptocurrencies with advanced caching and rate-limiting.
 
-**Live demo:** *(Add your demo URL here)*
+
 
 ## Table of Contents
 
 * [About](#about)
 * [Features](#features)
-* [Tech / Stack](#tech--stack)
+* [Tech Stack](#tech-stack)
+* [Architecture](#architecture)
 * [Screenshots](#screenshots)
 * [Getting Started](#getting-started)
-
   * [Prerequisites](#prerequisites)
-  * [Install](#install)
-  * [Run](#run)
+  * [Local Development](#local-development)
+  * [Docker Setup](#docker-setup)
 * [Configuration](#configuration)
 * [Usage](#usage)
-* [Deployment](#deployment)
 * [Contributing](#contributing)
-* [Roadmap](#roadmap)
 * [License](#license)
-* [Contact](#contact)
 
 ---
 
 ## About
 
-**Spark Crypto Hub** is a simple, responsive web app for watching cryptocurrency prices and trends in (near) real-time. It focuses on clarity, speed, and a pleasant UI so you can monitor market movements, build watchlists, and inspect price charts quickly.
-
-This README is intentionally generic — update the sections below to match the exact tech choices and scripts used in your repository.
+**Spark Crypto Hub** is a full-stack, responsive web application for monitoring cryptocurrency prices and trends in near real-time. It features a sleek, futuristic UI, dynamic animations, and interactive charts. The application is supported by a custom Node.js Express proxy server that handles API rate-limiting and response caching for the CoinGecko API, ensuring a smooth and uninterrupted user experience.
 
 ## Features
 
-* Live price feed for top cryptocurrencies
-* Search and add coins to a personal watchlist
-* Price charts (1h / 24h / 7d / 30d) with interactive tooltips
-* Sort coins by market cap, price change, volume, etc.
-* Responsive layout for desktop and mobile
-* Dark / light theme toggle
-* Lightweight and fast (works well on low-bandwidth connections)
+* **Live Market Data:** Real-time price feed for top cryptocurrencies.
+* **Interactive Charts:** Detailed price charts (1h / 24h / 7d / 30d) powered by Recharts.
+* **Advanced UI/UX:** Built with shadcn/ui components, Tailwind CSS, and Framer Motion for a premium, glassmorphism-inspired aesthetic.
+* **Smart Search & Watchlist:** Search and add coins to your personal watchlist.
+* **Custom Proxy Server:** Built-in Express backend to handle CoinGecko API rate limits with in-memory caching and exponential backoff retries.
+* **Global Currency Switcher:** Dynamically view prices in different fiat currencies (USD, INR, EUR).
+* **Responsive Design:** Fully optimized layout for both desktop and mobile devices.
+* **Dark / Light Mode:** Seamless theme toggling for different viewing preferences.
 
-## Tech / Stack
+## Tech Stack
 
-> Replace or update these to match your project.
+### Frontend
+* **Framework:** React 18 & Vite
+* **Styling:** Tailwind CSS
+* **UI Components:** Radix UI & shadcn/ui
+* **Animations:** Framer Motion & tailwindcss-animate
+* **Data Fetching:** React Query & Axios
+* **Charts:** Recharts
+* **Forms & Validation:** React Hook Form & Zod
 
-* Frontend: React (or your chosen framework)
-* Styling: Tailwind CSS / CSS Modules
-* Charts: Chart.js / Recharts / ApexCharts
-* API: CoinGecko / CoinMarketCap / Any public crypto API
-* Build: Vite / Create React App / Next.js
+### Backend
+* **Runtime:** Node.js
+* **Framework:** Express.js
+* **Middlewares:** cors, express-rate-limit
 
-## Screenshots
+### Infrastructure
+* **Containerization:** Docker & Docker Compose
 
-*(Add screenshots of your app here — place them in `/docs` or `/assets` and reference them.)*
+## Architecture
+
+The project is structured as a full-stack application:
+- **`src/` (Frontend):** Contains the React application. It communicates with the backend proxy to fetch cryptocurrency data.
+- **`server/` (Backend Proxy):** An Express server running on port 4000. It intercepts requests from the frontend, queries the public CoinGecko API, caches the responses, and implements rate-limiting and retry logic to prevent `429 Too Many Requests` errors.
 
 ---
 
@@ -63,45 +70,59 @@ These instructions will get a copy of the project running on your local machine 
 
 ### Prerequisites
 
-* Node.js (>= 16) and npm or yarn
-* Git
+* Node.js (>= 18)
+* npm or yarn
+* Docker (optional, for containerized setup)
 
-### Install
+### Local Development
+
+1. **Clone the repo**
+   ```bash
+   git clone https://github.com/Sarthak-Saini07/spark-crypto-hub.git
+   cd spark-crypto-hub
+   ```
+
+2. **Start the Backend Proxy**
+   Open a terminal and run:
+   ```bash
+   cd server
+   npm install
+   npm start
+   ```
+   The proxy server will start on `http://localhost:4000`.
+
+3. **Start the Frontend Development Server**
+   Open a new terminal window in the root directory:
+   ```bash
+   npm install
+   npm run dev
+   ```
+   The React app will be available at `http://localhost:8080` (or the port shown in your terminal).
+
+### Docker Setup
+
+You can run the entire stack (frontend and backend) using Docker Compose.
 
 ```bash
-# clone the repo
-git clone https://github.com/Sarthak-Saini07/spark-crypto-hub.git
-cd spark-crypto-hub
-
-# install dependencies (use npm or yarn)
-npm install
-# or
-yarn install
+# In the root directory of the project
+docker-compose up --build
 ```
 
-### Run (development)
-
-```bash
-# start dev server
-npm run dev
-# or
-yarn dev
-```
-
-Open `http://localhost:3000` (or the port shown in terminal) to view the app.
+- The frontend will be accessible at `http://localhost:3000`
+- The backend proxy will be accessible at `http://localhost:4000`
 
 ---
 
 ## Configuration
 
-If your app uses an API that requires a key, create a `.env` file in the project root and add the required variables. Example:
+If your app uses an API that requires a key or if you want to configure ports, create a `.env` file in the project root.
 
+Example frontend `.env`:
 ```env
-REACT_APP_API_KEY=your_secret_key
-REACT_APP_API_BASE=https://api.coingecko.com/api/v3
+VITE_API_URL=http://localhost:4000/api
 ```
 
-> CoinGecko is free and doesn't require an API key for public endpoints, but other providers (CoinMarketCap, CryptoCompare) may require keys and rate limiting.
+The backend server is configured to connect to `https://api.coingecko.com/api/v3/` by default.
 
 ## Usage
 
@@ -109,43 +130,7 @@ REACT_APP_API_BASE=https://api.coingecko.com/api/v3
 * Click a coin to open its detail view and interactive chart.
 * Add coins to your watchlist using the star (★) or the "Add" button.
 * Toggle dark mode using the theme switch in the header.
-
-Include instructions for any keyboard shortcuts, filtering, or saved settings your app supports.
-
-## Deployment
-
-### Deploy to Vercel
-
-1. Create a Vercel account and link your GitHub repo.
-2. Set any environment variables in the Vercel dashboard (if needed).
-3. Deploy — Vercel will build and publish automatically.
-
-### Deploy to GitHub Pages (if using a static build)
-
-```bash
-npm run build
-# then use gh-pages or GitHub Actions to publish the `build` or `dist` folder
-```
-
-### Docker (optional)
-
-Provide a `Dockerfile` if you want to containerize. Example:
-
-```dockerfile
-FROM node:lts-alpine as build
-WORKDIR /app
-COPY package*.json ./
-RUN npm ci
-COPY . .
-RUN npm run build
-
-FROM nginx:alpine
-COPY --from=build /app/dist /usr/share/nginx/html
-EXPOSE 80
-CMD ["nginx", "-g", "daemon off;"]
-```
-
----
+* Switch global currencies via the settings or header dropdown.
 
 ## Contributing
 
@@ -159,15 +144,9 @@ Thanks for wanting to contribute! Follow these steps:
 
 Please open issues for bugs and feature requests. Keep PRs focused and include screenshots or GIFs when UI is affected.
 
-## Roadmap
+## License
 
-Planned improvements (feel free to edit):
-
-* User authentication and saved watchlists
-* Price alerts and notifications (email / push)
-* Portfolio tracking (holdings, profit/loss)
-* Historical data export (CSV)
-* More advanced charting tools and indicators (RSI, EMA)
+This project is open-source and available under the [MIT License](LICENSE).
 
 ---
 
