@@ -1,5 +1,8 @@
 // server/index.js
+import path from "path";
+import { fileURLToPath } from "url";
 import express from "express";
+
 import rateLimit from "express-rate-limit";
 import cors from "cors"; // ✅ allow frontend to call this proxy
 
@@ -119,7 +122,16 @@ app.get(/^\/api\/(.*)/, async (req, res) => {
     inFlight.delete(url);
   }
 });
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
+// Serve Vite build files
+app.use(express.static(path.join(__dirname, "../dist")));
+
+// Fallback for React Router
+app.use((req, res) => {
+  res.sendFile(path.join(__dirname, "../dist/index.html"));
+});
 // ✅ LISTEN (bind to all interfaces so http://localhost:4000 works)
 app.listen(PORT, "0.0.0.0", () =>
   console.log(`🚀 Proxy running on http://localhost:${PORT}`)
