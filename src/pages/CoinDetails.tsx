@@ -12,7 +12,13 @@ export default function CoinDetails() {
   const { isFavorite, toggleFavorite, currency } = useAppContext();
   const favorite = isFavorite(id!);
 
-  const { data: coin, isLoading: coinLoading } = useQuery({
+  const {
+    data: coin,
+    isLoading: coinLoading,
+    isError: coinError,
+    refetch: refetchCoin,
+    isFetching: coinFetching,
+  } = useQuery({
     queryKey: ["coin", id],
     queryFn: () => fetchCoinDetails(id!),
     enabled: !!id,
@@ -26,10 +32,33 @@ export default function CoinDetails() {
 
   const isLoading = coinLoading || chartLoading;
 
-  if (isLoading) {
+  if (isLoading && !coin) {
     return (
       <div className="flex-1 flex justify-center items-center h-[60vh] animate-pulse">
         <Loader2 className="w-12 h-12 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (coinError && !coin) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center p-8 max-w-md mx-auto text-center my-16 bg-card/60 backdrop-blur-md rounded-3xl border border-border/50 shadow-sm animate-in fade-in">
+        <h2 className="text-xl font-bold mb-2">Unable to Load Coin Details</h2>
+        <p className="text-sm text-muted-foreground mb-6">
+          The request could not be completed. CoinGecko API may be temporarily rate limited.
+        </p>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => refetchCoin()}
+            disabled={coinFetching}
+            className="px-5 py-2.5 rounded-full bg-primary text-primary-foreground font-semibold text-sm hover:bg-primary/90 transition-all shadow disabled:opacity-50"
+          >
+            {coinFetching ? "Retrying..." : "Retry"}
+          </button>
+          <Link to="/" className="text-sm text-muted-foreground hover:text-foreground font-medium">
+            Back to Dashboard
+          </Link>
+        </div>
       </div>
     );
   }

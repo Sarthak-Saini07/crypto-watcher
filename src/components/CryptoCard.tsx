@@ -2,8 +2,9 @@ import { Link } from "react-router-dom";
 import { Star } from "lucide-react";
 import { useAppContext } from "../context/AppContext";
 import { formatCurrency } from "../lib/utils";
+import { MarketCoin } from "../types/crypto";
 
-export default function CryptoCard({ coin }: { coin: any }) {
+export default function CryptoCard({ coin }: { coin: MarketCoin }) {
   const { isFavorite, toggleFavorite, currency } = useAppContext();
   const favorite = isFavorite(coin.id);
 

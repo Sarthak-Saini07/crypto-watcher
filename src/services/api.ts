@@ -1,20 +1,32 @@
 import axios from "axios";
 
-// const API_URL = import.meta.env.VITE_API_URL || "http://localhost:4000/api";
-const API_URL = import.meta.env.VITE_API_URL || "/api";
+import { MarketCoin } from "../types/crypto";
+
+const rawBase =
+  import.meta.env.VITE_API_URL ||
+  import.meta.env.VITE_API_BASE ||
+  "/api";
+// Normalize: ensure it ends with /api (strip trailing slashes or /v3)
+const API_URL = rawBase.replace(/\/+$/, "").replace(/\/v3$/, "");
+
 export const fetchTrendingCoins = async () => {
   const { data } = await axios.get(`${API_URL}/search/trending`);
-  return data.coins.map((c: any) => c.item);
+  return data.coins.map((c: { item: unknown }) => c.item);
 };
 
-export const fetchMarketData = async (page = 1, currency = "usd") => {
+export const fetchMarketData = async (
+  page = 1,
+  currency = "usd",
+  perPage = 20,
+  sparkline = false
+): Promise<MarketCoin[]> => {
   const { data } = await axios.get(`${API_URL}/coins/markets`, {
     params: {
       vs_currency: currency,
       order: "market_cap_desc",
-      per_page: 50,
+      per_page: perPage,
       page,
-      sparkline: true,
+      sparkline,
     },
   });
   return data;

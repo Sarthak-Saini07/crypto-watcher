@@ -1,24 +1,46 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { fetchMarketData } from "../services/api";
 import CryptoCard from "../components/CryptoCard";
 import ConversionCalculator from "../components/ConversionCalculator";
-import { Search, Loader2 } from "lucide-react";
+import { Search, Loader2, AlertCircle, RefreshCw } from "lucide-react";
 import { useAppContext } from "../context/AppContext";
+import { MarketCoin } from "../types/crypto";
 
 export default function Dashboard() {
   const [search, setSearch] = useState("");
   const { currency } = useAppContext();
 
-  const { data: coins, isLoading, isError } = useQuery({
+  const {
+    data: coins,
+    isLoading,
+    isError,
+    error,
+    refetch,
+    isFetching,
+  } = useQuery({
     queryKey: ["market", currency],
-    queryFn: () => fetchMarketData(1, currency),
+    queryFn: () => fetchMarketData(1, currency, 20, false),
+    placeholderData: keepPreviousData,
   });
 
-  const filteredCoins = coins?.filter((coin: any) =>
-    coin.name.toLowerCase().includes(search.toLowerCase()) ||
-    coin.symbol.toLowerCase().includes(search.toLowerCase())
-  ) || [];
+  const coinList = Array.isArray(coins) ? coins : [];
+  const hasCoins = coinList.length > 0;
+
+  const filteredCoins = coinList.filter((coin: MarketCoin) =>
+    coin.name?.toLowerCase().includes(search.toLowerCase()) ||
+    coin.symbol?.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const getErrorMessage = () => {
+    const errObj = error as { response?: { status?: number; data?: { error?: string } }; message?: string };
+    const status = errObj?.response?.status;
+    const backendMsg = errObj?.response?.data?.error;
+    if (status === 429 || (backendMsg && backendMsg.toLowerCase().includes("rate limit"))) {
+      return "CoinGecko API rate limit reached. Please wait a moment before retrying.";
+    }
+    return backendMsg || "Failed to load market data. Please check your connection and try again.";
+  };
 
   return (
     <div className="flex-1 w-full pb-12">
@@ -80,17 +102,50 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {isLoading ? (
-          <div className="flex justify-center items-center py-20">
-            <Loader2 className="w-10 h-10 animate-spin text-primary" />
+        {/* Warning banner when showing cached data due to background refresh error */}
+        {isError && hasCoins && (
+          <div className="mb-6 p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-between text-sm animate-in fade-in">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              <span>Live market update temporarily unavailable. Displaying cached data.</span>
+            </div>
+            <button
+              onClick={() => refetch()}
+              disabled={isFetching}
+              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 font-semibold transition-colors disabled:opacity-50 text-xs shrink-0"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isFetching ? "animate-spin" : ""}`} />
+              {isFetching ? "Retrying..." : "Retry"}
+            </button>
           </div>
-        ) : isError ? (
-          <div className="text-center py-20 text-red-500">
-            <p>Failed to load market data. Please try again later.</p>
+        )}
+
+        {isLoading && !hasCoins ? (
+          <div className="flex flex-col justify-center items-center py-20 gap-3">
+            <Loader2 className="w-10 h-10 animate-spin text-primary" />
+            <p className="text-sm text-muted-foreground animate-pulse">Loading cryptocurrency market...</p>
+          </div>
+        ) : isError && !hasCoins ? (
+          <div className="text-center py-16 px-4 bg-card/60 backdrop-blur-md rounded-3xl border border-border/50 max-w-lg mx-auto shadow-sm">
+            <div className="w-12 h-12 rounded-full bg-destructive/10 text-destructive flex items-center justify-center mx-auto mb-4">
+              <AlertCircle className="w-6 h-6" />
+            </div>
+            <h3 className="text-lg font-bold text-foreground mb-2">Unable to Load Market Data</h3>
+            <p className="text-sm text-muted-foreground mb-6 leading-relaxed">
+              {getErrorMessage()}
+            </p>
+            <button
+              onClick={() => refetch()}
+              disabled={isFetching}
+              className="inline-flex items-center gap-2 px-6 py-2.5 rounded-full bg-primary text-primary-foreground font-semibold hover:bg-primary/90 transition-all shadow-md active:scale-95 disabled:opacity-50"
+            >
+              <RefreshCw className={`w-4 h-4 ${isFetching ? "animate-spin" : ""}`} />
+              {isFetching ? "Retrying..." : "Retry Now"}
+            </button>
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {filteredCoins.map((coin: any) => (
+            {filteredCoins.map((coin: MarketCoin) => (
               <CryptoCard key={coin.id} coin={coin} />
             ))}
           </div>

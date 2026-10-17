@@ -8,7 +8,26 @@ import Favorites from "./pages/Favorites";
 import NotFound from "./pages/NotFound";
 import Layout from "./components/Layout";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 90 * 1000, // 90s freshness
+      gcTime: 10 * 60 * 1000, // 10m cache retention
+      refetchOnWindowFocus: false, // avoid hitting rate limits when switching tabs
+      refetchOnReconnect: false,
+      retry: (failureCount, error: unknown) => {
+        // Never retry client errors or rate limits (429) automatically
+        const errObj = error as { response?: { status?: number } };
+        const status = errObj?.response?.status;
+        if (status === 429 || (status !== undefined && status >= 400 && status < 500)) {
+          return false;
+        }
+        // At most 1 retry for transient network/5xx errors
+        return failureCount < 1;
+      },
+    },
+  },
+});
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
