@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { fetchSimplePrice } from "../services/api";
 import { ArrowLeftRight, Loader2, AlertCircle } from "lucide-react";
 import { useAppContext } from "../context/AppContext";
+import { MarketCoin } from "../types/crypto";
 
 export default function ConversionCalculator({ defaultCoin = "bitcoin" }: { defaultCoin?: string }) {
   const { currency } = useAppContext();
@@ -11,6 +12,11 @@ export default function ConversionCalculator({ defaultCoin = "bitcoin" }: { defa
   const [coin, setCoin] = useState(defaultCoin);
   const [fiat, setFiat] = useState(currency);
   const [debouncedAmount, setDebouncedAmount] = useState(amount);
+
+  const queryClient = useQueryClient();
+  const marketCoins = queryClient.getQueryData<MarketCoin[]>(["market", fiat]);
+  const cachedMatch = marketCoins?.find((c) => c.id === coin);
+  const marketPrice = cachedMatch?.current_price;
 
   // Sync with global currency switcher
   useEffect(() => {
@@ -28,10 +34,12 @@ export default function ConversionCalculator({ defaultCoin = "bitcoin" }: { defa
   const { data, isLoading, isError } = useQuery({
     queryKey: ["simplePrice", coin, fiat],
     queryFn: () => fetchSimplePrice(coin, fiat),
-    staleTime: 60000, // cache for 1 minute
+    staleTime: 90000,
+    // If rate already exists in market data cache, don't trigger duplicate network request
+    enabled: marketPrice === undefined,
   });
 
-  const rate = data?.[coin]?.[fiat];
+  const rate = marketPrice ?? data?.[coin]?.[fiat];
 
   const handleSwap = () => {
     setIsCoinToFiat(!isCoinToFiat);

@@ -1,12 +1,16 @@
 // server/index.js
 import path from "path";
 import { fileURLToPath } from "url";
+import fs from "fs";
 import express from "express";
 import rateLimit from "express-rate-limit";
 import cors from "cors";
 
 const app = express();
 const PORT = process.env.PORT || 4000;
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Trust reverse proxy for correct IP identification on Render
 app.set("trust proxy", 1);
@@ -35,11 +39,34 @@ const COINGECKO_BASE_URL = COINGECKO_PRO_KEY
 
 // Cache Configuration:
 // FRESH_TTL: duration where data is returned immediately without hitting CoinGecko (90s)
-// STALE_TTL: maximum duration where expired data can still be served as fallback if upstream is 429/down (60m)
+// STALE_TTL: maximum duration where expired data can still be served as fallback if upstream is 429/down (24h)
 const FRESH_TTL_MS = 90_000;
-const STALE_TTL_MS = 60 * 60_000;
+const STALE_TTL_MS = 24 * 60 * 60_000;
 
 const cache = new Map();
+
+// Load persistent disk snapshot cache on boot to ensure Market Overview has data immediately
+const SNAPSHOT_FILE = path.join(__dirname, "data", "snapshot-cache.json");
+try {
+  if (fs.existsSync(SNAPSHOT_FILE)) {
+    const raw = fs.readFileSync(SNAPSHOT_FILE, "utf-8");
+    const snapshot = JSON.parse(raw);
+    const now = Date.now();
+    for (const [key, data] of Object.entries(snapshot)) {
+      // Mark baseline snapshot as stale so it serves as an immediate fallback if CoinGecko is 429,
+      // while allowing background fresh updates when CoinGecko is available.
+      cache.set(key, {
+        data,
+        createdAt: now - FRESH_TTL_MS - 1000,
+        freshUntil: now - 1000,
+        staleUntil: now + STALE_TTL_MS,
+      });
+    }
+    console.log(`[Cache Startup] Pre-loaded ${Object.keys(snapshot).length} entries from snapshot-cache.json`);
+  }
+} catch (e) {
+  console.warn(`[Cache Startup] Could not load snapshot cache: ${e.message}`);
+}
 
 function getCanonicalKey(subPath, queryObj = {}) {
   const cleanPath = (subPath || "").replace(/^\/+|\/+$/g, "");
@@ -80,10 +107,29 @@ function setCacheEntry(key, data) {
   });
 }
 
-// Upstream rate-limit cooldown tracking
+// Global Upstream Request Serialization & Pacing to avoid parallel 429 collision on Render
+let lastUpstreamCallTime = 0;
+const MIN_UPSTREAM_INTERVAL_MS = 1500; // 1.5s spacing between CoinGecko requests
+let upstreamChain = Promise.resolve();
+
+function executePacedUpstreamFetch(fn) {
+  const next = upstreamChain.then(async () => {
+    const now = Date.now();
+    const elapsed = now - lastUpstreamCallTime;
+    if (elapsed < MIN_UPSTREAM_INTERVAL_MS) {
+      await new Promise((r) => setTimeout(r, MIN_UPSTREAM_INTERVAL_MS - elapsed));
+    }
+    lastUpstreamCallTime = Date.now();
+    return fn();
+  });
+  upstreamChain = next.catch(() => {});
+  return next;
+}
+
+// Shared rate-limit cooldown tracking across ALL endpoints
 let upstreamRateLimitedUntil = 0;
 
-// Deduplication for simultaneous requests
+// Deduplication for simultaneous requests for the exact same canonical key
 const inFlight = new Map(); // canonicalKey -> Promise
 
 async function fetchFromCoinGecko(subPath, queryObj) {
@@ -124,6 +170,35 @@ async function fetchFromCoinGecko(subPath, queryObj) {
   }
 }
 
+// Synthesize simple/price from cached market data if possible to eliminate redundant API calls
+function trySynthesizeSimplePrice(queryObj) {
+  const ids = (queryObj.ids || "").toLowerCase().split(",").map((s) => s.trim()).filter(Boolean);
+  const vsCurrencies = (queryObj.vs_currencies || "").toLowerCase().split(",").map((s) => s.trim()).filter(Boolean);
+  if (ids.length === 0 || vsCurrencies.length === 0) return null;
+
+  const result = {};
+  for (const currency of vsCurrencies) {
+    // Search cached market data for this currency
+    let foundMarketData = null;
+    for (const [key, entry] of cache.entries()) {
+      if (key.startsWith("coins/markets") && key.includes(`vs_currency=${currency}`) && Array.isArray(entry.data)) {
+        foundMarketData = entry.data;
+        break;
+      }
+    }
+    if (!foundMarketData) return null; // Cannot synthesize all currencies
+
+    for (const id of ids) {
+      const match = foundMarketData.find((c) => c.id === id);
+      if (!match || match.current_price === undefined) return null;
+      if (!result[id]) result[id] = {};
+      result[id][currency] = match.current_price;
+    }
+  }
+
+  return result;
+}
+
 // CoinGecko API Proxy Handler
 app.get(/^\/api\/(.*)/, async (req, res) => {
   // Strip optional v3/ prefix so both /api/... and /api/v3/... resolve correctly
@@ -138,12 +213,21 @@ app.get(/^\/api\/(.*)/, async (req, res) => {
     return res.json(cacheEntry.data);
   }
 
+  // 2. Synthesize simple/price from cached market list if possible
+  if (subPath === "simple/price") {
+    const synthetic = trySynthesizeSimplePrice(req.query);
+    if (synthetic) {
+      res.set("X-Cache", "SYNTHETIC");
+      return res.json(synthetic);
+    }
+  }
+
   const now = Date.now();
 
-  // 2. If CoinGecko is currently in rate-limit cooldown, do not hammer upstream
+  // 3. Shared Cooldown: If CoinGecko is currently in rate-limit cooldown, do not hammer upstream
   if (now < upstreamRateLimitedUntil) {
     const remainingSec = Math.max(1, Math.ceil((upstreamRateLimitedUntil - now) / 1000));
-    // Graceful stale fallback
+    // Graceful stale fallback: Serve cached data even if expired
     if (cacheEntry) {
       console.warn(`[CoinGecko Cooldown] Serving stale cache for ${canonicalKey} (${remainingSec}s cooldown remaining)`);
       res.set("X-Cache", "STALE");
@@ -160,7 +244,7 @@ app.get(/^\/api\/(.*)/, async (req, res) => {
     });
   }
 
-  // 3. Deduplicate simultaneous requests for the exact same resource
+  // 4. Deduplicate simultaneous requests for the exact same canonical key
   if (inFlight.has(canonicalKey)) {
     try {
       const data = await inFlight.get(canonicalKey);
@@ -180,8 +264,18 @@ app.get(/^\/api\/(.*)/, async (req, res) => {
     }
   }
 
-  // 4. Fetch upstream with error handling and non-blocking rate limit response
-  const fetchPromise = (async () => {
+  // 5. Fetch upstream through paced queue with error handling and non-blocking rate limit response
+  const fetchPromise = executePacedUpstreamFetch(async () => {
+    // Re-check cooldown after waiting in queue
+    const checkNow = Date.now();
+    if (checkNow < upstreamRateLimitedUntil) {
+      const remainingSec = Math.max(1, Math.ceil((upstreamRateLimitedUntil - checkNow) / 1000));
+      const err = new Error("CoinGecko API rate limit reached. Please wait before retrying.");
+      err.status = 429;
+      err.retryAfter = remainingSec;
+      throw err;
+    }
+
     try {
       const response = await fetchFromCoinGecko(subPath, req.query);
 
@@ -222,7 +316,7 @@ app.get(/^\/api\/(.*)/, async (req, res) => {
       err.status = isAbort ? 504 : 502;
       throw err;
     }
-  })();
+  });
 
   inFlight.set(canonicalKey, fetchPromise);
 
@@ -253,9 +347,6 @@ app.get(/^\/api\/(.*)/, async (req, res) => {
     inFlight.delete(canonicalKey);
   }
 });
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 // Serve Vite build files
 app.use(express.static(path.join(__dirname, "../dist")));

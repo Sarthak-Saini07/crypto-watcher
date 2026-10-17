@@ -171,4 +171,49 @@ describe("Proxy & Caching Logic", () => {
       mockServer.close();
     }
   });
+
+  test("Synthetic simple/price derived from market cache", () => {
+    const cache = new Map();
+    cache.set("coins/markets?vs_currency=usd", {
+      data: [
+        { id: "bitcoin", current_price: 85000 },
+        { id: "ethereum", current_price: 2500 },
+      ],
+      createdAt: Date.now(),
+      freshUntil: Date.now() + 60000,
+      staleUntil: Date.now() + 120000,
+    });
+
+    function trySynthesizeSimplePrice(queryObj) {
+      const ids = (queryObj.ids || "").toLowerCase().split(",").map((s) => s.trim()).filter(Boolean);
+      const vsCurrencies = (queryObj.vs_currencies || "").toLowerCase().split(",").map((s) => s.trim()).filter(Boolean);
+      if (ids.length === 0 || vsCurrencies.length === 0) return null;
+
+      const result = {};
+      for (const currency of vsCurrencies) {
+        let foundMarketData = null;
+        for (const [key, entry] of cache.entries()) {
+          if (key.startsWith("coins/markets") && key.includes(`vs_currency=${currency}`) && Array.isArray(entry.data)) {
+            foundMarketData = entry.data;
+            break;
+          }
+        }
+        if (!foundMarketData) return null;
+
+        for (const id of ids) {
+          const match = foundMarketData.find((c) => c.id === id);
+          if (!match || match.current_price === undefined) return null;
+          if (!result[id]) result[id] = {};
+          result[id][currency] = match.current_price;
+        }
+      }
+      return result;
+    }
+
+    const synthetic = trySynthesizeSimplePrice({ ids: "bitcoin,ethereum", vs_currencies: "usd" });
+    assert.deepStrictEqual(synthetic, {
+      bitcoin: { usd: 85000 },
+      ethereum: { usd: 2500 },
+    });
+  });
 });

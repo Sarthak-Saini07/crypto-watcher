@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { fetchMarketData } from "../services/api";
 import CryptoCard from "../components/CryptoCard";
@@ -24,6 +24,35 @@ export default function Dashboard() {
     placeholderData: keepPreviousData,
   });
 
+  const [cooldownSec, setCooldownSec] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (isError && error) {
+      const errObj = error as { response?: { data?: { retryAfter?: number }; headers?: Record<string, string> } };
+      const retrySec = errObj?.response?.data?.retryAfter || (errObj?.response?.headers?.["retry-after"] ? parseInt(errObj.response.headers["retry-after"], 10) : null);
+      if (retrySec && !isNaN(retrySec) && retrySec > 0) {
+        setCooldownSec(retrySec);
+      }
+    } else {
+      setCooldownSec(null);
+    }
+  }, [isError, error]);
+
+  useEffect(() => {
+    if (cooldownSec === null || cooldownSec <= 0) return;
+    const interval = setInterval(() => {
+      setCooldownSec((prev) => {
+        if (prev === null || prev <= 1) {
+          clearInterval(interval);
+          refetch(); // Automatically retry once cooldown ends
+          return null;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [cooldownSec, refetch]);
+
   const coinList = Array.isArray(coins) ? coins : [];
   const hasCoins = coinList.length > 0;
 
@@ -37,6 +66,9 @@ export default function Dashboard() {
     const status = errObj?.response?.status;
     const backendMsg = errObj?.response?.data?.error;
     if (status === 429 || (backendMsg && backendMsg.toLowerCase().includes("rate limit"))) {
+      if (cooldownSec && cooldownSec > 0) {
+        return `CoinGecko API rate limit reached. Upstream cooldown active for ${cooldownSec}s.`;
+      }
       return "CoinGecko API rate limit reached. Please wait a moment before retrying.";
     }
     return backendMsg || "Failed to load market data. Please check your connection and try again.";
@@ -136,11 +168,15 @@ export default function Dashboard() {
             </p>
             <button
               onClick={() => refetch()}
-              disabled={isFetching}
-              className="inline-flex items-center gap-2 px-6 py-2.5 rounded-full bg-primary text-primary-foreground font-semibold hover:bg-primary/90 transition-all shadow-md active:scale-95 disabled:opacity-50"
+              disabled={isFetching || (cooldownSec !== null && cooldownSec > 0)}
+              className="inline-flex items-center gap-2 px-6 py-2.5 rounded-full bg-primary text-primary-foreground font-semibold hover:bg-primary/90 transition-all shadow-md active:scale-95 disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
             >
               <RefreshCw className={`w-4 h-4 ${isFetching ? "animate-spin" : ""}`} />
-              {isFetching ? "Retrying..." : "Retry Now"}
+              {isFetching
+                ? "Retrying..."
+                : cooldownSec && cooldownSec > 0
+                ? `Retry in ${cooldownSec}s`
+                : "Retry Now"}
             </button>
           </div>
         ) : (
